@@ -63,7 +63,7 @@
 ;;    `evil-leader/set-leader', e.g. (evil-leader/set-leader ",") to change it to
 ;;    ",".
 ;;    The leader has to be readable by `read-kbd-macro', so using Space as a
-;;    prefix key would be (evil-leader/set-leader "<Space>").
+;;    prefix key would be (evil-leader/set-leader "SPC").
 ;;
 ;;    Beginning with version 0.3 evil-leader has support for mode-local bindings:
 ;;
@@ -92,6 +92,19 @@
 (defcustom evil-leader/leader "\\"
   "The <leader> key, used to access keys defined by `evil-leader/set-key' in normal and visual state.
 Must be readable by `read-kbd-macro'. For example: \",\"."
+  :type 'string
+  :group 'evil-leader)
+
+(defvar evil-leader/first-char nil
+  "The first character used after leader.")
+
+(defcustom evil-leader/first-char-setter "C-SPC"
+  "The keymap used to set first character used after leader."
+  :type 'string
+  :group 'evil-leader)
+
+(defcustom evil-leader/first-char-unsetter "C-SPC"
+  "The keymap used to unset first character used after leader."
   :type 'string
   :group 'evil-leader)
 
@@ -124,7 +137,10 @@ The combination has to be readable by `read-kbd-macro'."
   :keymap nil
   (let* ((prefixed (read-kbd-macro (concat evil-leader/non-normal-prefix evil-leader/leader)))
          (mode-map (cdr (assoc major-mode evil-leader--mode-maps)))
-         (map (or mode-map evil-leader--default-map)))
+         (map (let ((unnarrowed-map (or mode-map evil-leader--default-map)))
+                (if evil-leader/first-char
+                   (cdr (assoc evil-leader/first-char unnarrowed-map))
+                  unnarrowed-map))))
     (if evil-leader-mode
         (progn
           (evil-normalize-keymaps)
@@ -137,23 +153,44 @@ The combination has to be readable by `read-kbd-macro'."
         (define-key evil-emacs-state-local-map prefixed nil)
         (define-key evil-insert-state-local-map prefixed nil)))))
 
+(defmacro evil-leader/turn-off-do-turn-on (&rest content)
+  "Turns evil-leader off, does content, turns it back on again."
+  `(let ((global-on global-evil-leader-mode)
+         (local-on evil-leader-mode))
+     (when local-on
+       (evil-leader-mode -1))
+     (when global-on
+       (global-evil-leader-mode -1))
+     ,@content
+     (if global-on
+         (global-evil-leader-mode 1)
+       (when local-on
+         (evil-leader-mode 1)))))
+
+(defun evil-leader/restart () (evil-leader/turn-off-do-turn-on))
+
+(defun evil-leader/set-first-char (key)
+  ;; (evil-leader/turn-off-do-turn-on (setq evil-leader/first-char key))
+  (setq evil-leader/first-char key)
+  (evil-leader/restart))
+
+(defun evil-leader/unset-first-char ()
+  ;; (evil-leader/turn-off-do-turn-on (setq evil-leader/first-char nil))
+  (setq evil-leader/first-char nil)
+  (evil-leader/restart))
+
 (defun evil-leader/set-leader (key &optional prefix)
   "Set leader key to `key' and non-normal-prefix to `prefix' and remove old bindings.
 
 Passing `nil' as `prefix' leaves prefix unchanged."
-  (let ((global-on global-evil-leader-mode)
-        (local-on evil-leader-mode))
-    (when local-on
-      (evil-leader-mode -1))
-    (when global-on
-      (global-evil-leader-mode -1))
-    (setq evil-leader/leader key)
-    (when prefix
-      (setq evil-leader/non-normal-prefix prefix))
-    (if global-on
-        (global-evil-leader-mode 1)
-      (when local-on
-        (evil-leader-mode 1)))))
+  ;; (evil-leader/turn-off-do-turn-on
+  ;;  (setq evil-leader/leader key)
+  ;;  (when prefix
+  ;;    (setq evil-leader/non-normal-prefix prefix)))
+  (setq evil-leader/leader key)
+  (when prefix
+    (setq evil-leader/non-normal-prefix prefix))
+  (evil-leader/restart))
 
 ;;;###autoload
 (defun evil-leader/set-key (key def &rest bindings)
